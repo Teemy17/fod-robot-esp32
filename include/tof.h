@@ -1,8 +1,5 @@
 #pragma once
-// VL53L0X obstacle sensing -- PRD FR-10: one front-center (covers the
-// lidar's ~15-20cm dead zone) + two front-corner units at 45deg, optional
-// downward cliff sensor. Not implemented yet; this header is the seam so
-// main.cpp doesn't need to change when it is.
+// PRD v2: lateral + low-forward VL53L0X. Interface only; not implemented.
 
 #include <Arduino.h>
 

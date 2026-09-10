@@ -1,5 +1,4 @@
 #include "encoders.h"
-#include "config.h"
 
 Encoder gLeftEncoder;
 Encoder gRightEncoder;
@@ -12,7 +11,7 @@ void Encoder::begin(int pinA, int pinB) {
 }
 
 void IRAM_ATTR Encoder::isr() {
-  // x4 quadrature decode on A's rising/falling edge: direction from B's
+  // x2 quadrature decode on A's rising/falling edge: direction from B's
   // level at the edge. Simple and cheap enough for an ISR; swap for the
   // ESP32 hardware PCNT peripheral later if jitter under load proves this
   // insufficient (§2.3 asks the quadrature mode used to be recorded either
@@ -27,9 +26,9 @@ void IRAM_ATTR leftIsr() { gLeftEncoder.isr(); }
 void IRAM_ATTR rightIsr() { gRightEncoder.isr(); }
 }  // namespace
 
-void encodersBegin() {
-  gLeftEncoder.begin(pins::kLeftEncA, pins::kLeftEncB);
-  gRightEncoder.begin(pins::kRightEncA, pins::kRightEncB);
-  attachInterrupt(digitalPinToInterrupt(pins::kLeftEncA), leftIsr, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(pins::kRightEncA), rightIsr, CHANGE);
+void encodersBegin(int leftA, int leftB, int rightA, int rightB) {
+  gLeftEncoder.begin(leftA, leftB);
+  gRightEncoder.begin(rightA, rightB);
+  attachInterrupt(digitalPinToInterrupt(leftA), leftIsr, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(rightA), rightIsr, CHANGE);
 }

@@ -21,11 +21,20 @@ int splitFields(const String& line, String out[], int maxFields) {
 
 bool parseFloatStrict(const String& tok, float& value) {
   if (tok.length() == 0) return false;
-  // No exponent notation on the wire (protocol.md section 2).
-  if (tok.indexOf('e') >= 0 || tok.indexOf('E') >= 0) return false;
+  size_t i = tok[0] == '-' ? 1 : 0;
+  bool digit = false, dot = false;
+  int decimals = 0;
+  for (; i < tok.length(); ++i) {
+    char c = tok[i];
+    if (c == '.' && !dot) { dot = true; continue; }
+    if (c < '0' || c > '9') return false;
+    digit = true;
+    if (dot && ++decimals > 3) return false;
+  }
+  if (!digit) return false;
   char* end = nullptr;
-  value = strtod(tok.c_str(), &end);
-  return end != nullptr && *end == '\0';
+  value = strtof(tok.c_str(), &end);
+  return end != nullptr && *end == '\0' && isfinite(value);
 }
 
 // 3 decimals, no exponent, negative zero normalised away -- mirrors
@@ -42,7 +51,7 @@ String fmt3(float value) {
 
 bool feedsWatchdog(CmdType type) {
   switch (type) {
-    case CmdType::kVelocity:
+    case CmdType::kPwm:
     case CmdType::kStop:
     case CmdType::kEnable:
     case CmdType::kDisable:
@@ -63,25 +72,16 @@ ParsedCommand parseCommand(const String& raw) {
   int n = splitFields(line, fields, 4);
   const String& tag = fields[0];
 
-  if (tag == "V") {
+  if (tag == "V" || tag == "P") {
     if (n != 3) { cmd.type = CmdType::kMalformed; return cmd; }
     float v, omega;
     if (!parseFloatStrict(fields[1], v) || !parseFloatStrict(fields[2], omega)) {
       cmd.type = CmdType::kMalformed;
       return cmd;
     }
-    cmd.type = CmdType::kVelocity;
+    cmd.type = tag == "P" ? CmdType::kPwm : CmdType::kVelocity;
     cmd.v = v;
     cmd.omega = omega;
-    return cmd;
-  }
-  if (tag == "M") {
-    if (n != 2 || (fields[1] != "0" && fields[1] != "1")) {
-      cmd.type = CmdType::kMalformed;
-      return cmd;
-    }
-    cmd.type = CmdType::kMagnet;
-    cmd.magnet_on = (fields[1] == "1");
     return cmd;
   }
   if (tag == "S" || tag == "E" || tag == "D" || tag == "?" || tag == "H") {

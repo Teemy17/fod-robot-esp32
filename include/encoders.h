@@ -36,4 +36,6 @@ class Encoder {
 extern Encoder gLeftEncoder;
 extern Encoder gRightEncoder;
 
-void encodersBegin();
+// Retained for future encoder hardware; unused in the TT prototype.
+// Supply actual GPIOs explicitly rather than requiring encoder pins in config.h.
+void encodersBegin(int leftA, int leftB, int rightA, int rightB);

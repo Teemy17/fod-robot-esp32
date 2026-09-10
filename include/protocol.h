@@ -1,24 +1,13 @@
 #pragma once
-// The ESP32 side of docs/protocol.md v1. Read that document (in
-// fod-robot-pathing/docs/protocol.md) before touching this file -- it is a
-// contract with the Pi's src/fodnav/link/esp32.py, and the Pi's tests
-// (tests/test_esp32.py) encode exactly what it expects to receive.
-//
-// Framing: newline-terminated ASCII, single-space separated fields, at most
-// 120 bytes including the terminator, at most 3 decimal places, no exponent
-// notation. A malformed recognised command is dropped WHOLE, never acted on
-// in part. An unrecognised first token is ignored, not an error -- that is
-// what lets the Pi's boot-time line noise and this firmware's own boot spew
-// coexist on the wire.
+// Prototype serial dialect. See README for commands and compatibility.
 
 #include <Arduino.h>
 
-constexpr uint8_t kProtoVersion = 1;
+constexpr uint8_t kProtoVersion = 2;  // prototype dialect; see README
 constexpr size_t kMaxLineBytes = 120;
 constexpr uint32_t kWatchdogTimeoutMs = 300;  // protocol.md section 6
 
-// Status flags, protocol.md section 4. Keep in bit-for-bit sync with
-// fodnav.link.esp32.Flags.
+// Legacy v1 flags, retained for future encoder support; unused by PT.
 enum StatusFlag : uint8_t {
   kFlagMotorsEnabled = 0x01,
   kFlagWatchdogFired  = 0x02,
@@ -36,7 +25,7 @@ enum class CmdType {
   kStop,        // S
   kEnable,      // E
   kDisable,     // D
-  kMagnet,      // M <0|1>
+  kPwm,         // P <left duty> <right duty> (normalized)
   kTelemetryReq,// ?
   kHandshake,   // H
   kMalformed,   // recognised tag, bad field(s) -- drop the whole line
@@ -44,14 +33,12 @@ enum class CmdType {
 
 struct ParsedCommand {
   CmdType type = CmdType::kNone;
-  float v = 0.0f;
-  float omega = 0.0f;
-  bool magnet_on = false;
+  float v = 0.0f;      // left normalized duty for P
+  float omega = 0.0f;  // right normalized duty for P
 };
 
-// Does this command tag feed the watchdog? protocol.md section 6: exactly
-// V/S/E/D/?. `M` is deliberately absent -- a drum command must not be able
-// to mask a control loop that has stopped sending velocities.
+// Does this prototype command feed the watchdog? Exactly
+// P/S/E/D/?. Unsupported commands never feed the watchdog.
 bool feedsWatchdog(CmdType type);
 
 // Parse one line (no trailing \n; \r already stripped by the caller's
@@ -62,6 +49,7 @@ ParsedCommand parseCommand(const String& line);
 
 // --- device -> host lines -----------------------------------------------
 
+// Legacy encoder codec (not emitted by this prototype).
 // T <seq> <t_ms> <ticks_l> <ticks_r> <v_meas> <omega_meas> <flags(hex)>
 void sendTelemetry(Stream& out, uint16_t seq, uint32_t t_ms, int32_t ticks_l,
                     int32_t ticks_r, float v_meas, float omega_meas,
