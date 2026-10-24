@@ -1,32 +1,60 @@
 #pragma once
-// Textbook PID with integral clamping. One instance per wheel.
-// FR-5: closed-loop velocity is not optional here -- magnet drag rises as
-// debris accumulates during a trial, so open-loop PWM drifts from the
-// commanded speed on exactly the axis every §11b result is plotted against.
+// Per-wheel velocity controller: feedforward + PI, optional D on the measurement.
+// One instance per wheel. Setpoint and measurement are in m/s, output in PWM counts.
+// Pure C++ (no Arduino), so it is host-testable.
+//
+// FR-5: closed-loop velocity is not optional -- magnet drag rises as debris accumulates
+// during a trial, so open-loop PWM drifts from the commanded speed.
+//
+// Changes from the first version:
+//  * feedforward term (kff): most of the output comes from the setpoint, so the integral
+//    only trims; without it Ki alone has to build the whole output.
+//  * derivative is taken on the measurement, so a new V command does not kick the output.
+//  * conditional integration (no accumulation while the output is saturated), and the
+//    integral is bounded without dividing by ki, so ki = 0 is safe.
+
+#include <cmath>
+
+namespace ctl {
+inline float clampf(float x, float lo, float hi) {
+  return x < lo ? lo : (x > hi ? hi : x);
+}
+}  // namespace ctl
 
 struct Pid {
-  float kp, ki, kd, outMax;
+  float kp = 0.0f, ki = 0.0f, kd = 0.0f;
+  float kff = 0.0f;      // feedforward: output counts per unit of setpoint (counts per m/s)
+  float outMax = 0.0f;   // symmetric output limit, counts
   float integral = 0.0f;
-  float prevError = 0.0f;
+  float prevMeasured = 0.0f;
+  bool primed = false;
 
   float update(float setpoint, float measured, float dtSeconds) {
-    float error = setpoint - measured;
-    integral += error * dtSeconds;
-    // Clamp the integral term directly (in output units) rather than the
-    // accumulator, so kI can be re-tuned without re-deriving the clamp.
-    float iTerm = constrain(ki * integral, -outMax, outMax);
-    if (iTerm != ki * integral) {
-      // Anti-windup: undo the accumulation that just got clamped away.
-      integral = iTerm / ki;
+    const float err = setpoint - measured;
+    float derivative = 0.0f;
+    if (primed && dtSeconds > 1e-6f) {
+      derivative = -(measured - prevMeasured) / dtSeconds;
     }
-    float derivative = (dtSeconds > 1e-6f) ? (error - prevError) / dtSeconds : 0.0f;
-    prevError = error;
-    float out = kp * error + iTerm + kd * derivative;
-    return constrain(out, -outMax, outMax);
+    prevMeasured = measured;
+    primed = true;
+
+    const float base = kff * setpoint + kp * err + kd * derivative;
+    if (ki > 0.0f) {
+      const float trial = base + ki * integral;
+      const bool pushingPastMax = (trial >= outMax && err > 0.0f);
+      const bool pushingPastMin = (trial <= -outMax && err < 0.0f);
+      if (!pushingPastMax && !pushingPastMin) integral += err * dtSeconds;
+      const float bound = outMax / ki;
+      integral = ctl::clampf(integral, -bound, bound);
+    } else {
+      integral = 0.0f;
+    }
+    return ctl::clampf(base + ki * integral, -outMax, outMax);
   }
 
   void reset() {
     integral = 0.0f;
-    prevError = 0.0f;
+    prevMeasured = 0.0f;
+    primed = false;
   }
 };

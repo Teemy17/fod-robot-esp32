@@ -1,4 +1,5 @@
 #include "encoders.h"
+#include "quadrature.h"
 
 Encoder gLeftEncoder;
 Encoder gRightEncoder;
@@ -6,19 +7,18 @@ Encoder gRightEncoder;
 void Encoder::begin(int pinA, int pinB) {
   pinA_ = pinA;
   pinB_ = pinB;
-  pinMode(pinA_, INPUT_PULLUP);
-  pinMode(pinB_, INPUT_PULLUP);
+  // Plain INPUT: GPIO 34-39 have no pull-ups, and these encoders drive their outputs.
+  pinMode(pinA_, INPUT);
+  pinMode(pinB_, INPUT);
+  prev_ = (uint8_t)((digitalRead(pinA_) << 1) | digitalRead(pinB_));
 }
 
 void IRAM_ATTR Encoder::isr() {
-  // x2 quadrature decode on A's rising/falling edge: direction from B's
-  // level at the edge. Simple and cheap enough for an ISR; swap for the
-  // ESP32 hardware PCNT peripheral later if jitter under load proves this
-  // insufficient (§2.3 asks the quadrature mode used to be recorded either
-  // way, so whichever you ship, note it in HARDWARE.md).
-  bool a = digitalRead(pinA_);
-  bool b = digitalRead(pinB_);
-  ticks_ += (a == b) ? 1 : -1;
+  const uint8_t cur = (uint8_t)((digitalRead(pinA_) << 1) | digitalRead(pinB_));
+  const uint8_t prev = prev_;
+  if (quadIllegal(prev, cur)) errors_++;
+  ticks_ += quadDelta(prev, cur);
+  prev_ = cur;
 }
 
 namespace {
@@ -30,5 +30,7 @@ void encodersBegin(int leftA, int leftB, int rightA, int rightB) {
   gLeftEncoder.begin(leftA, leftB);
   gRightEncoder.begin(rightA, rightB);
   attachInterrupt(digitalPinToInterrupt(leftA), leftIsr, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(leftB), leftIsr, CHANGE);
   attachInterrupt(digitalPinToInterrupt(rightA), rightIsr, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(rightB), rightIsr, CHANGE);
 }
