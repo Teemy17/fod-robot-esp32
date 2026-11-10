@@ -16,8 +16,8 @@ constexpr int kPwmFreqHz = 20000;
 }
 namespace prototype {
 // Duty cap is a starting limit, NOT a voltage regulator or measured speed.
-constexpr float kMaxDuty = 0.5f;
-constexpr int kLeftSign = 1, kRightSign = 1;  // set -1 for reversed wiring
+constexpr float kMaxDuty = 1.0f;
+constexpr int kLeftSign = 1, kRightSign = -1;  // set -1 for reversed wiring
 static_assert(kMaxDuty > 0 && kMaxDuty <= 1, "Duty limit must be (0, 1]");
 static_assert(kLeftSign * kLeftSign == 1 && kRightSign * kRightSign == 1,
               "Motor signs must be +1 or -1");
