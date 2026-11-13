@@ -44,7 +44,7 @@ constexpr float kTicksPerRev = 13.0f * 90.0f * 4.0f;
 // wheels, drive forward, and check `T` ticks increase. Motor direction signs
 // (prototype::kLeftSign/kRightSign in config.h) are separate: set those first.
 constexpr int kLeftEncSign = 1;
-constexpr int kRightEncSign = 1;
+constexpr int kRightEncSign = -1;
 
 // ---- Geometry (NOMINAL, not measured) -------------------------------------------------
 constexpr float kWheelRadiusM = 0.0325f;  // nominal 65 mm wheel; roll-test it
