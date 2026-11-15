@@ -36,10 +36,10 @@ constexpr bool kConstantsMeasured = (ROBOT_CONSTANTS_MEASURED != 0);
 
 // ---- Encoder ------------------------------------------------------------------------
 // x4 decoding: both edges of both phases (encoders.cpp attaches A and B).
-// DATASHEET NOMINAL = 13 pulses/motor rev x 90 gear x 4 edges = 4680. NOT MEASURED. The
-// two datasheets for this motor family disagree on the gear count (13x48 vs 13x45 for
-// the "1:45"), so measure it: whatever you measure must match the decoding mode above.
-constexpr float kTicksPerRev = 13.0f * 90.0f * 4.0f;
+// MEASURED by hand, 10 turns x 2 runs per wheel (tools/ticks_count.py in the harness repo):
+// left 4733.1 / 4744.5, right 4725.9 / 4708.5, mean 4728. That is 1% above the datasheet
+// 13 pulses x 90 gear x 4 edges = 4680: the "1:90" gearbox is ~1:90.9. It confirms x4.
+constexpr float kTicksPerRev = 4728.0f;
 // Sign so that positive ticks = the robot moving forward. Verify on the bench: lift the
 // wheels, drive forward, and check `T` ticks increase. Motor direction signs
 // (prototype::kLeftSign/kRightSign in config.h) are separate: set those first.
@@ -68,22 +68,26 @@ constexpr float kFullScaleCounts = 1023.0f;  // 10-bit PWM, see pins::kPwmResolu
 // Starting gains. TUNE ON HARDWARE (README, "Tuning"). Units: PWM counts per (m/s) of
 // setpoint or error.
 //
-// Feedforward is deliberately 75% of what the datasheet speed implies. The datasheet is
-// a no-load figure at 6 V; a loaded robot on four sagging AAs is slower, so the full
-// value would overdrive and overshoot. Under-driving lets Kp and Ki trim upward and the
-// speed never exceeds the target. Measure speed at a known duty and set this to ~1.0
-// of the measured value. (Simulated against a first-order wheel with the speed filter
-// and one tick of actuation delay: ~3% overshoot, 5% settling in ~0.25 s for the
-// datasheet plant. Those numbers are a model, not a measurement.)
-constexpr float kFeedforwardScale = 0.75f;
-constexpr float kFeedforward = kFeedforwardScale * kFullScaleCounts / kNoLoadMps;  // ~1290
-constexpr float kKp = 700.0f;
-constexpr float kKi = 3000.0f;
+// Feedforward MEASURED on the bench (wheels raised, 4xAA, settled counts over the last
+// second of a 5 s run): left 261 / 539 and right 251 / 509 counts at 0.10 / 0.20 m/s.
+// Counts more than double from 0.10 to 0.20, so a 2-point line has a negative intercept
+// (likely battery sag at the higher current, not friction); the least-squares line
+// through zero is 2608 and predicts both points within 2%. The integral trims the rest,
+// including the left wheel needing ~5% more than the right. The datasheet value
+// (kFullScaleCounts / kNoLoadMps, ~1720) was half of this, which is why the untuned
+// loop took ~1 s to rise.
+constexpr float kFeedforward = 2600.0f;
+// Kp/Ki: with Kp 700 / Ki 3000 and the measured feedforward, a 0.20 step rose in ~0.22 s
+// but the integral wound up during the rise: 6% / 10% overshoot (L/R) and a ~2 s tail.
+// Lower Ki stops the windup, higher Kp keeps the rise fast. Chosen on a first-order model
+// fitted to the bench logs (tau ~0.16 s); confirm on the bench.
+constexpr float kKp = 1400.0f;
+constexpr float kKi = 1000.0f;
 constexpr float kKd = 0.0f;  // quantised speed signal: derivative mostly adds noise
 
 constexpr float kSpeedFilterAlpha = 0.3f;     // low-pass on the measured wheel speed
 constexpr float kSetpointDeadbandMps = 0.005f;  // below this the wheel is commanded to rest
-constexpr float kStictionCounts = 0.0f;       // duty where the wheel just starts; measure
+constexpr float kStictionCounts = 0.0f;       // the 2-point fit above gave < 0: none to add
 
 // ---- Stall protection ----------------------------------------------------------------
 // A wheel driven at >= kStallDutyCounts that stays below kStallSpeedMps for kStallTimeMs
