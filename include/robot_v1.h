@@ -2,18 +2,14 @@
 // Constants for the nav-compatible (protocol v1) build. Pins shared with the v2 bench
 // build (motor driver, STBY, e-stop, direction signs, duty cap) stay in config.h.
 //
-// NOTHING BELOW IS MEASURED. Every number is either a datasheet value or a conservative
-// bring-up choice, and is marked as such. Until the geometry is measured on the real
-// chassis:
-//   * the firmware uses these nominal values to run the wheel-speed loop (enough to bench
-//     test and tune), but
-//   * the `I` handshake reports 0.000 for ticks/rev, wheel radius and track width, so
-//     nav refuses to run on odometry that would be fiction (same approach as the v2
-//     prototype, and finding #7 in the harness repo).
+// The geometry below is MEASURED on the real chassis (16 Nov 2026, tools/drive_measure.py
+// in the harness repo) and the nav_v1 build sets -D ROBOT_CONSTANTS_MEASURED=1, so the
+// `I` handshake reports these numbers. Without the flag it reports 0.000 for ticks/rev,
+// wheel radius and track width, and nav refuses to run (finding #7 in the harness repo).
 //
-// To flip it: measure, then in the SAME change update fod-robot-pathing's robot.yaml
-// (the handshake asserts both sides agree to 1e-6 m), then build with
-// -D ROBOT_CONSTANTS_MEASURED=1.
+// To change a number: in the SAME change update the harness repo's config/robot.yaml
+// (nav's handshake asserts both sides agree to 1e-6) and its config/sim_robot.yaml
+// (tests/contract/test_firmware_constants.py checks both).
 
 #include <stdint.h>
 #include "drive_control.h"
@@ -46,9 +42,16 @@ constexpr float kTicksPerRev = 4728.0f;
 constexpr int kLeftEncSign = 1;
 constexpr int kRightEncSign = -1;
 
-// ---- Geometry (NOMINAL, not measured) -------------------------------------------------
-constexpr float kWheelRadiusM = 0.0325f;  // nominal 65 mm wheel; roll-test it
-constexpr float kTrackWidthM = 0.200f;    // placeholder; spin-test it
+// ---- Geometry (MEASURED) -------------------------------------------------------------
+// Roll test: 0.10 m/s on the floor, distance by tape. Runs 2 and 3 gave 32.98 / 33.47 mm
+// (run 1 curved, L/R -2.7%, left out). The datasheet 65 mm wheel rolls ~2% further.
+// Distances were read to 1 cm, so this is good to ~1.5%; re-run read to the mm to refine.
+constexpr float kWheelRadiusM = 0.0332f;
+// Spin test at 1.5 rad/s (1.0 stalls on the floor), effective skid-steer track width
+// at kWheelRadiusM: CCW 0.1978 m (6 runs, +-2.6%), CW 0.2226 m (5 runs, +-1.3%). The
+// chassis slips more turning clockwise; this is the mean of the two directions, so
+// odometry heading is ~6% off per direction. Scales with kWheelRadiusM if that changes.
+constexpr float kTrackWidthM = 0.210f;
 
 // Conservative command limits for bring-up (the duty cap in config.h also applies).
 constexpr float kVMaxMps = 0.25f;
